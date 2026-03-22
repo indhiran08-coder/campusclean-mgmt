@@ -114,16 +114,21 @@ const CSS = `
   .login-btn{width:100%;padding:13px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:700;margin-top:4px;transition:all 0.2s;}
   .login-btn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(99,102,241,0.4);}
   .login-err{font-size:12px;color:var(--red);margin-bottom:8px;}
-  .nav{height:56px;background:rgba(3,7,18,0.95);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:10px;position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
-  .nav-logo{font-size:15px;font-weight:800;color:var(--text);display:flex;align-items:center;gap:8px;flex-shrink:0;}
-  .nav-logo-icon{width:30px;height:30px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;}
+  .nav{height:56px;background:rgba(3,7,18,0.95);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:8px;position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);overflow:hidden;}
+  .nav-logo{font-size:14px;font-weight:800;color:var(--text);display:flex;align-items:center;gap:6px;flex-shrink:0;}
+  .nav-logo-icon{width:28px;height:28px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
   .nav-logo span{color:var(--accent);}
-  .nav-badge{font-size:11px;font-weight:700;color:var(--red);background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:20px;padding:3px 10px;display:flex;align-items:center;gap:5px;}
+  .nav-badge{font-size:10px;font-weight:700;color:var(--red);background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:20px;padding:3px 8px;display:flex;align-items:center;gap:4px;flex-shrink:0;}
   .live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;flex-shrink:0;}
-  .nav-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
-  .nav-timer{font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;}
-  .nav-logout{padding:6px 14px;border-radius:8px;background:transparent;border:1px solid var(--border2);color:var(--text2);font-size:12px;font-weight:600;transition:all 0.15s;}
+  .nav-right{margin-left:auto;display:flex;align-items:center;gap:6px;flex-shrink:0;}
+  .nav-timer{font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;flex-shrink:0;}
+  .nav-logout{padding:5px 10px;border-radius:8px;background:transparent;border:1px solid var(--border2);color:var(--text2);font-size:11px;font-weight:600;transition:all 0.15s;flex-shrink:0;white-space:nowrap;}
   .nav-logout:hover{border-color:var(--red);color:var(--red);}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:200;display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(4px);}
+  .modal-sheet{background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:600px;max-height:90vh;overflow-y:auto;padding:20px;animation:slideUp 0.3s ease;}
+  @keyframes slideUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
+  .modal-handle{width:40px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 16px;}
+  .modal-close{position:absolute;top:16px;right:16px;background:var(--card2);border:none;color:var(--text2);width:30px;height:30px;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
   .rbar{height:2px;background:var(--border);}
   .rbar-fill{height:100%;background:var(--accent);transition:width 1s linear;}
   .tabs{display:flex;overflow-x:auto;scrollbar-width:none;padding:0 20px;border-bottom:1px solid var(--border);background:var(--bg2);}
@@ -212,6 +217,7 @@ export default function App() {
   const [filter,    setFilter]    = useState("all");
   const [bFilter,   setBFilter]   = useState("all");
   const [search,    setSearch]    = useState("");
+  const [selected,  setSelected]  = useState(null);
   const timerRef = useRef(null);
 
   const prevIds = useRef(new Set());
@@ -408,7 +414,7 @@ export default function App() {
                 const iss = ISSUE_TYPES.find(i=>i.id===r.issueId);
                 const st  = STATUS[r.status];
                 return (
-                  <div className="rcard" key={r.id}>
+                  <div className="rcard" key={r.id} onClick={()=>setSelected(r)} style={{cursor:"pointer"}}>
                     <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
                       <div style={{width:40,height:40,borderRadius:10,background:`${iss?.color}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{iss?.icon}</div>
                       <div style={{flex:1,minWidth:0}}>
@@ -431,7 +437,7 @@ export default function App() {
                           </div>
                         )}
                         {r.status!=="resolved" && (
-                          <div style={{display:"flex",gap:6,marginTop:10}}>
+                          <div style={{display:"flex",gap:6,marginTop:10}} onClick={e=>e.stopPropagation()}>
                             {r.status!=="cleaning" && <button className="act-btn act-yellow" onClick={()=>doUpdate(r.id,"cleaning")}>🧹 Cleaning</button>}
                             <button className="act-btn act-green" onClick={()=>doUpdate(r.id,"resolved")}>✅ Resolved</button>
                           </div>
@@ -536,6 +542,74 @@ export default function App() {
               </div>
             </>
           )}
+
+      {/* ── DETAIL MODAL ── */}
+      {selected && (() => {
+        const iss = ISSUE_TYPES.find(i=>i.id===selected.issueId);
+        const st  = STATUS[selected.status];
+        const dt  = new Date(selected.timestamp);
+        const dateStr = dt.toLocaleDateString("en-IN",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
+        const timeStr = dt.toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",hour12:true});
+        return (
+          <div className="modal-overlay" onClick={()=>setSelected(null)}>
+            <div className="modal-sheet" onClick={e=>e.stopPropagation()} style={{position:"relative"}}>
+              <div className="modal-handle"/>
+              <button className="modal-close" onClick={()=>setSelected(null)}>✕</button>
+
+              {/* Header */}
+              <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:18}}>
+                <div style={{width:48,height:48,borderRadius:12,background:`${iss?.color}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}}>{iss?.icon}</div>
+                <div>
+                  <div style={{fontSize:16,fontWeight:800,color:"var(--text)"}}>{selected.roomId}</div>
+                  <div style={{fontSize:12,color:"var(--text3)",marginTop:2}}>{iss?.label}</div>
+                </div>
+                <span className="status-pill" style={{background:st.bg,color:st.color,marginLeft:"auto"}}>{st.label}</span>
+              </div>
+
+              {/* Date & Time */}
+              <div style={{background:"var(--bg2)",borderRadius:10,padding:"12px 14px",marginBottom:12}}>
+                <div style={{fontSize:10,color:"var(--text3)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6}}>Reported On</div>
+                <div style={{fontSize:14,fontWeight:700,color:"var(--text)"}}>{dateStr}</div>
+                <div style={{fontSize:13,color:"var(--accent)",marginTop:3,fontFamily:"'JetBrains Mono',monospace"}}>{timeStr}</div>
+              </div>
+
+              {/* Comment */}
+              {selected.comment && (
+                <div style={{background:"var(--bg2)",borderRadius:10,padding:"12px 14px",marginBottom:12}}>
+                  <div style={{fontSize:10,color:"var(--text3)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6}}>Comment</div>
+                  <div style={{fontSize:13,color:"var(--text2)",fontStyle:"italic"}}>"{selected.comment}"</div>
+                </div>
+              )}
+
+              {/* Photo */}
+              {selected.photo && (
+                <div style={{marginBottom:12}}>
+                  <div style={{fontSize:10,color:"var(--text3)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>Photo</div>
+                  <img src={selected.photo} alt="Report" style={{width:"100%",borderRadius:12,border:"1px solid var(--border)",cursor:"pointer"}} onClick={()=>window.open(selected.photo,"_blank")}/>
+                  <div style={{fontSize:10,color:"var(--text3)",marginTop:4,textAlign:"center"}}>Tap to open full size</div>
+                </div>
+              )}
+
+              {/* Resolved time */}
+              {selected.resolvedAt && (
+                <div style={{background:"rgba(16,185,129,0.08)",borderRadius:10,padding:"10px 14px",marginBottom:12,border:"1px solid rgba(16,185,129,0.2)"}}>
+                  <div style={{fontSize:11,color:"var(--green)",fontWeight:600}}>✓ Resolved {timeAgo(selected.resolvedAt)} · {new Date(selected.resolvedAt).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",hour12:true})}</div>
+                </div>
+              )}
+
+              {/* Actions */}
+              {selected.status !== "resolved" && (
+                <div style={{display:"flex",gap:8,marginTop:4}}>
+                  {selected.status !== "cleaning" && (
+                    <button className="act-btn act-yellow" style={{flex:1,padding:"10px"}} onClick={()=>{doUpdate(selected.id,"cleaning");setSelected(s=>({...s,status:"cleaning"}));}}>🧹 Mark Cleaning</button>
+                  )}
+                  <button className="act-btn act-green" style={{flex:1,padding:"10px"}} onClick={()=>{doUpdate(selected.id,"resolved");setSelected(s=>({...s,status:"resolved",resolvedAt:Date.now()}));}}>✅ Mark Resolved</button>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
         </div>
       </div>
