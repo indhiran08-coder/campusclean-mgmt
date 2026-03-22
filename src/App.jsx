@@ -40,10 +40,35 @@ const BUILDINGS = [
   { name:"Girls Hostel", code:"GH" },
 ];
 
-function mapRow(r) {
+// ── Push Notifications ────────────────────────────────────────────────────────
+async function registerPush() {
+  if (!("Notification" in window) || !("serviceWorker" in navigator)) return false;
+  if (Notification.permission === "denied") return false;
+  if (Notification.permission !== "granted") {
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") return false;
+  }
+  return true;
+}
+
+function sendNotification(report) {
+  const iss = ISSUE_TYPES.find(i => i.id === report.issueId);
+  if (Notification.permission === "granted") {
+    new Notification("🚻 New Report — CampusClean", {
+      body: `${iss?.icon || "⚠️"} ${iss?.label || report.issueId} at ${report.roomId}`,
+      icon: "/pwa-192x192.png",
+      badge: "/pwa-192x192.png",
+      tag: report.id,
+      requireInteraction: true,
+    });
+  }
+}
+
+
   return {
     id: r.id, roomId: r.room_id, issueId: r.issue_id,
     comment: r.comment || "", status: r.status,
+    photo: r.photo_url || null,
     timestamp: new Date(r.submitted_at).getTime(),
     resolvedAt: r.resolved_at ? new Date(r.resolved_at).getTime() : null,
   };
@@ -189,17 +214,31 @@ export default function App() {
   const [search,    setSearch]    = useState("");
   const timerRef = useRef(null);
 
-  const load = useCallback(async () => {
-    try { const d = await fetchReports(); setReports(d.map(mapRow)); }
-    catch(e) { console.error(e); }
-    finally { setLoading(false); }
+  const prevIds = useRef(new Set());
+
+  const load = useCallback(async (isRefresh = false) => {
+    try {
+      const data = await fetchReports();
+      const mapped = data.map(mapRow);
+      if (isRefresh && prevIds.current.size > 0) {
+        const newReports = mapped.filter(r => !prevIds.current.has(r.id));
+        newReports.forEach(r => sendNotification(r));
+      }
+      prevIds.current = new Set(mapped.map(r => r.id));
+      setReports(mapped);
+    } catch(e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     if (!authed) return;
-    load();
+    registerPush();
+    load(false);
     timerRef.current = setInterval(() => {
-      setCountdown(c => { if (c <= 1) { load(); return 30; } return c - 1; });
+      setCountdown(c => { if (c <= 1) { load(true); return 30; } return c - 1; });
     }, 1000);
     return () => clearInterval(timerRef.current);
   }, [authed, load]);
@@ -267,6 +306,13 @@ export default function App() {
           <div className="nav-badge"><div className="live-dot"/>{pending>0?`${pending} Pending`:"All Clear"}</div>
           <div className="nav-right">
             <div className="nav-timer">↻ {countdown}s</div>
+            <button style={{padding:"6px 12px",borderRadius:8,background:"transparent",border:"1px solid var(--border2)",color:"var(--text2)",fontSize:12,fontWeight:600,cursor:"pointer"}}
+              onClick={async () => {
+                const ok = await registerPush();
+                alert(ok ? "✅ Notifications enabled! You'll be notified on new reports." : "❌ Please allow notifications in your browser settings.");
+              }}>
+              🔔
+            </button>
             <button className="nav-logout" onClick={()=>{setAuthed(false);clearInterval(timerRef.current);}}>Logout</button>
           </div>
         </nav>
@@ -324,6 +370,7 @@ export default function App() {
                         <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{iss?.label} · {timeAgo(r.timestamp)}</div>
                       </div>
                       <span className="status-pill" style={{background:st.bg,color:st.color,flexShrink:0}}>{st.label}</span>
+                      {r.photo && <span style={{fontSize:11,color:"var(--accent)",flexShrink:0}}>📷</span>}
                       {r.status!=="resolved" && (
                         <button className="act-btn act-green" style={{padding:"4px 8px",fontSize:11}} onClick={()=>doUpdate(r.id,"resolved")}>✅</button>
                       )}
@@ -372,6 +419,17 @@ export default function App() {
                         </div>
                         <span className="status-pill" style={{background:st.bg,color:st.color}}>{st.label}</span>
                         {r.comment && <div style={{fontSize:12,color:"var(--text3)",marginTop:6,fontStyle:"italic"}}>"{r.comment}"</div>}
+                        {r.photo && (
+                          <div style={{marginTop:8}}>
+                            <img
+                              src={r.photo}
+                              alt="Report photo"
+                              style={{width:"100%",maxHeight:200,objectFit:"cover",borderRadius:8,border:"1px solid var(--border)",cursor:"pointer"}}
+                              onClick={() => window.open(r.photo, "_blank")}
+                            />
+                            <div style={{fontSize:10,color:"var(--text3)",marginTop:3}}>Tap photo to view full size</div>
+                          </div>
+                        )}
                         {r.status!=="resolved" && (
                           <div style={{display:"flex",gap:6,marginTop:10}}>
                             {r.status!=="cleaning" && <button className="act-btn act-yellow" onClick={()=>doUpdate(r.id,"cleaning")}>🧹 Cleaning</button>}
