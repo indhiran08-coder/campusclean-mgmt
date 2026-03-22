@@ -64,7 +64,7 @@ function sendNotification(report) {
   }
 }
 
-
+function mapRow(r) {
   return {
     id: r.id, roomId: r.room_id, issueId: r.issue_id,
     comment: r.comment || "", status: r.status,
