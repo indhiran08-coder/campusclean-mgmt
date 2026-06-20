@@ -21,9 +21,7 @@ const ISSUE_TYPES = [
   { id:"dirty",   label:"Dirty Restroom",  icon:"🧹", color:"#f97316" },
   { id:"smell",   label:"Bad Smell",        icon:"💨", color:"#a855f7" },
   { id:"nowater", label:"No Water",         icon:"💧", color:"#3b82f6" },
-  { id:"nosoap",  label:"No Soap/Tissue",   icon:"🧴", color:"#22c55e" },
   { id:"broken",  label:"Broken Tap/Flush", icon:"🔧", color:"#eab308" },
-  { id:"other",   label:"Other Issue",      icon:"⚠️", color:"#6b7280" },
 ];
 
 const STATUS = {
@@ -40,7 +38,36 @@ const BUILDINGS = [
   { name:"Girls Hostel", code:"GH" },
 ];
 
-// ── Push Notifications ────────────────────────────────────────────────────────
+// ── EmailJS Notification ──────────────────────────────────────────────────────
+const EMAILJS_SERVICE  = "service_6ausj5q";
+const EMAILJS_TEMPLATE = "template_umoyicp";
+const EMAILJS_KEY      = "sn4b-6LGHXt27PljS";
+const NOTIFY_EMAIL     = "indhiranofficial4@gmail.com";
+
+async function sendEmailAlert(report) {
+  const iss = ISSUE_TYPES.find(i => i.id === report.issueId);
+  try {
+    await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        service_id:  EMAILJS_SERVICE,
+        template_id: EMAILJS_TEMPLATE,
+        user_id:     EMAILJS_KEY,
+        template_params: {
+          to_email:    NOTIFY_EMAIL,
+          from_name:   "CampusClean Alert",
+          to_name:     "Admin",
+          message:     `🚨 NEW REPORT\n\nRoom: ${report.roomId}\nIssue: ${iss?.icon} ${iss?.label}\nComment: ${report.comment || "None"}\nTime: ${new Date(report.timestamp).toLocaleString("en-IN")}\n\nView: https://campusclean-mgmt.vercel.app`,
+        },
+      }),
+    });
+    console.log("Email alert sent for", report.roomId);
+  } catch(e) {
+    console.error("Email alert failed:", e);
+  }
+}
+
 async function registerPush() {
   if (!("Notification" in window) || !("serviceWorker" in navigator)) return false;
   if (Notification.permission === "denied") return false;
@@ -53,15 +80,20 @@ async function registerPush() {
 
 function sendNotification(report) {
   const iss = ISSUE_TYPES.find(i => i.id === report.issueId);
+  // Try browser notification
   if (Notification.permission === "granted") {
-    new Notification("🚻 New Report — CampusClean", {
-      body: `${iss?.icon || "⚠️"} ${iss?.label || report.issueId} at ${report.roomId}`,
-      icon: "/pwa-192x192.png",
-      badge: "/pwa-192x192.png",
-      tag: report.id,
-      requireInteraction: true,
-    });
+    try {
+      new Notification("🚻 New Report — CampusClean", {
+        body: `${iss?.icon || "⚠️"} ${iss?.label || report.issueId} at ${report.roomId}`,
+        icon: "/pwa-192x192.png",
+        badge: "/pwa-192x192.png",
+        tag: report.id,
+        requireInteraction: true,
+      });
+    } catch(e) { console.log("Browser notification failed"); }
   }
+  // Always send email as backup
+  sendEmailAlert(report);
 }
 
 function mapRow(r) {
@@ -114,16 +146,23 @@ const CSS = `
   .login-btn{width:100%;padding:13px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:700;margin-top:4px;transition:all 0.2s;}
   .login-btn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(99,102,241,0.4);}
   .login-err{font-size:12px;color:var(--red);margin-bottom:8px;}
-  .nav{height:56px;background:rgba(3,7,18,0.95);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:8px;position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);overflow:hidden;}
+  .nav{height:56px;background:rgba(3,7,18,0.95);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:8px;position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
   .nav-logo{font-size:14px;font-weight:800;color:var(--text);display:flex;align-items:center;gap:6px;flex-shrink:0;}
   .nav-logo-icon{width:28px;height:28px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
   .nav-logo span{color:var(--accent);}
+  .nav-logo-text{display:none;}
   .nav-badge{font-size:10px;font-weight:700;color:var(--red);background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:20px;padding:3px 8px;display:flex;align-items:center;gap:4px;flex-shrink:0;}
   .live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;flex-shrink:0;}
   .nav-right{margin-left:auto;display:flex;align-items:center;gap:6px;flex-shrink:0;}
   .nav-timer{font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;flex-shrink:0;}
-  .nav-logout{padding:5px 10px;border-radius:8px;background:transparent;border:1px solid var(--border2);color:var(--text2);font-size:11px;font-weight:600;transition:all 0.15s;flex-shrink:0;white-space:nowrap;}
+  .nav-logout{padding:6px 10px;border-radius:8px;background:transparent;border:1px solid var(--border2);color:var(--text2);font-size:11px;font-weight:600;transition:all 0.15s;flex-shrink:0;white-space:nowrap;cursor:pointer;}
   .nav-logout:hover{border-color:var(--red);color:var(--red);}
+  .nav-bell{padding:6px 8px;border-radius:8px;background:transparent;border:1px solid var(--border2);color:var(--text2);font-size:14px;transition:all 0.15s;flex-shrink:0;cursor:pointer;}
+  .nav-bell:hover{border-color:var(--accent);color:var(--accent);}
+  @media(min-width:480px){
+    .nav-logo-text{display:inline;}
+    .nav-timer{font-size:11px;}
+  }
   .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:200;display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(4px);}
   .modal-sheet{background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:600px;max-height:90vh;overflow-y:auto;padding:20px;animation:slideUp 0.3s ease;}
   @keyframes slideUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
@@ -308,18 +347,21 @@ export default function App() {
       <style>{CSS}</style>
       <div className="app">
         <nav className="nav">
-          <div className="nav-logo"><div className="nav-logo-icon">🚻</div>Campus<span>Clean</span></div>
+          <div className="nav-logo">
+            <div className="nav-logo-icon">🚻</div>
+            <span className="nav-logo-text">Campus<span>Clean</span></span>
+          </div>
           <div className="nav-badge"><div className="live-dot"/>{pending>0?`${pending} Pending`:"All Clear"}</div>
           <div className="nav-right">
             <div className="nav-timer">↻ {countdown}s</div>
-            <button style={{padding:"6px 12px",borderRadius:8,background:"transparent",border:"1px solid var(--border2)",color:"var(--text2)",fontSize:12,fontWeight:600,cursor:"pointer"}}
+            <button className="nav-bell"
               onClick={async () => {
                 const ok = await registerPush();
-                alert(ok ? "✅ Notifications enabled! You'll be notified on new reports." : "❌ Please allow notifications in your browser settings.");
+                alert(ok ? "✅ Notifications enabled!" : "❌ Allow notifications in browser settings.");
               }}>
               🔔
             </button>
-            <button className="nav-logout" onClick={()=>{setAuthed(false);clearInterval(timerRef.current);}}>Logout</button>
+            <button className="nav-logout" onClick={()=>{setAuthed(false);clearInterval(timerRef.current);}}>Exit</button>
           </div>
         </nav>
         <div className="rbar"><div className="rbar-fill" style={{width:`${((30-countdown)/30)*100}%`}}/></div>
@@ -390,7 +432,7 @@ export default function App() {
 
           {tab==="reports" && (
             <>
-              <input className="search-input" placeholder="🔍 Search room, issue or comment..." value={search} onChange={e=>setSearch(e.target.value)}/>
+              <input className="search-input" placeholder="🔍 Search room or issue..." value={search} onChange={e=>setSearch(e.target.value)}/>
               <div className="filter-row">
                 {["all","pending","cleaning","resolved"].map(f => (
                   <button key={f} className={`chip ${filter===f?"on":""}`} onClick={()=>setFilter(f)}>
