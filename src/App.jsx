@@ -101,6 +101,7 @@ function mapRow(r) {
     id: r.id, roomId: r.room_id, issueId: r.issue_id,
     comment: r.comment || "", status: r.status,
     photo: r.photo_url || null,
+    deviceId: r.device_id || null,
     timestamp: new Date(r.submitted_at).getTime(),
     resolvedAt: r.resolved_at ? new Date(r.resolved_at).getTime() : null,
   };
@@ -256,6 +257,7 @@ export default function App() {
   const [filter,    setFilter]    = useState("all");
   const [bFilter,   setBFilter]   = useState("all");
   const [search,    setSearch]    = useState("");
+  const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [selected,  setSelected]  = useState(null);
   const timerRef = useRef(null);
 
@@ -334,12 +336,25 @@ export default function App() {
     pending: reports.filter(r=>r.status==="pending"&&r.roomId.startsWith(b.code)).length,
   }));
   const maxBldg = Math.max(...bldgStats.map(b=>b.total),1);
+
+  // Device fingerprint frequency — flags devices with 5+ reports in last 24h
+  const deviceCounts = {};
+  reports.forEach(r => {
+    if (!r.deviceId) return;
+    if (Date.now() - r.timestamp > 24 * 3600000) return;
+    deviceCounts[r.deviceId] = (deviceCounts[r.deviceId] || 0) + 1;
+  });
+  function isFlagged(r) {
+    return r.deviceId && deviceCounts[r.deviceId] >= 5;
+  }
+
   const filtered = reports.filter(r => {
     const sOk = filter==="all"||r.status===filter;
     const bOk = bFilter==="all"||r.roomId.startsWith(bFilter);
+    const fOk = !flaggedOnly||isFlagged(r);
     const q   = search.toLowerCase();
     const qOk = q===""||r.roomId.toLowerCase().includes(q)||(ISSUE_TYPES.find(i=>i.id===r.issueId)?.label||"").toLowerCase().includes(q)||(r.comment||"").toLowerCase().includes(q);
-    return sOk&&bOk&&qOk;
+    return sOk&&bOk&&fOk&&qOk;
   });
 
   return (
@@ -448,6 +463,13 @@ export default function App() {
                   </button>
                 ))}
               </div>
+              {Object.keys(deviceCounts).some(d => deviceCounts[d] >= 5) && (
+                <div className="filter-row">
+                  <button className={`chip ${flaggedOnly?"on":""}`} style={flaggedOnly?{borderColor:"var(--red)",background:"rgba(239,68,68,0.1)",color:"var(--red)"}:{}} onClick={()=>setFlaggedOnly(!flaggedOnly)}>
+                    ⚠️ Flagged devices only
+                  </button>
+                </div>
+              )}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                 <span style={{fontSize:12,color:"var(--text3)",fontWeight:600}}>{filtered.length} reports</span>
                 <button className="export-btn" onClick={exportCSV}>⬇ Export CSV</button>
@@ -466,6 +488,9 @@ export default function App() {
                           <span style={{marginLeft:"auto",fontSize:11,color:"var(--text3)"}}>{timeAgo(r.timestamp)}</span>
                         </div>
                         <span className="status-pill" style={{background:st.bg,color:st.color}}>{st.label}</span>
+                        {isFlagged(r) && (
+                          <span className="status-pill" style={{background:"rgba(239,68,68,0.12)",color:"var(--red)",marginLeft:6}}>⚠️ {deviceCounts[r.deviceId]}x today</span>
+                        )}
                         {r.comment && <div style={{fontSize:12,color:"var(--text3)",marginTop:6,fontStyle:"italic"}}>"{r.comment}"</div>}
                         {r.photo && (
                           <div style={{marginTop:8}}>
@@ -607,6 +632,13 @@ export default function App() {
                 </div>
                 <span className="status-pill" style={{background:st.bg,color:st.color,marginLeft:"auto"}}>{st.label}</span>
               </div>
+
+              {isFlagged(selected) && (
+                <div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:10,padding:"10px 14px",marginBottom:12}}>
+                  <div style={{fontSize:12,fontWeight:700,color:"var(--red)"}}>⚠️ Possible spam — this device submitted {deviceCounts[selected.deviceId]} reports in the last 24h</div>
+                  <div style={{fontSize:11,color:"var(--text3)",marginTop:3}}>Device fingerprint match. Not proof of identity — review before acting.</div>
+                </div>
+              )}
 
               {/* Date & Time */}
               <div style={{background:"var(--bg2)",borderRadius:10,padding:"12px 14px",marginBottom:12}}>
