@@ -213,6 +213,24 @@ const CSS = `
   .export-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:10px;background:var(--accent);border:none;color:#fff;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.2s;}
   .export-btn:hover{background:var(--accent2);transform:translateY(-1px);}
   .empty{text-align:center;padding:40px 20px;color:var(--text3);font-size:14px;}
+  .cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+  .cal-nav-btn{width:32px;height:32px;border-radius:8px;background:var(--card);border:1px solid var(--border);color:var(--text2);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .cal-nav-btn:hover{border-color:var(--accent2);color:var(--accent);}
+  .cal-month-label{font-size:15px;font-weight:700;color:var(--text);}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+  .cal-dow{font-size:10px;font-weight:700;color:var(--text3);text-align:center;padding:6px 0;text-transform:uppercase;}
+  .cal-cell{aspect-ratio:1;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;border:1px solid transparent;transition:all 0.15s;position:relative;}
+  .cal-cell:hover{border-color:var(--border2);}
+  .cal-cell.empty-cell{cursor:default;}
+  .cal-cell.today{border-color:var(--accent);}
+  .cal-cell.selected{background:var(--accent);}
+  .cal-cell.selected .cal-day-num{color:#fff;}
+  .cal-day-num{font-size:12px;font-weight:600;color:var(--text2);}
+  .cal-dot{width:5px;height:5px;border-radius:50%;margin-top:2px;}
+  .cal-count{font-size:8px;font-weight:700;color:var(--text3);position:absolute;bottom:3px;}
+  .cal-legend{display:flex;align-items:center;gap:12px;margin-top:14px;font-size:11px;color:var(--text3);flex-wrap:wrap;}
+  .cal-legend-dot{display:inline-flex;align-items:center;gap:5px;}
+  .cal-legend-swatch{width:8px;height:8px;border-radius:50%;}
   @media(min-width:768px){
     .kpi-grid{grid-template-columns:repeat(4,1fr);}
     .page{padding:24px 32px;max-width:1200px;margin:0 auto;}
@@ -258,6 +276,8 @@ export default function App() {
   const [bFilter,   setBFilter]   = useState("all");
   const [search,    setSearch]    = useState("");
   const [flaggedOnly, setFlaggedOnly] = useState(false);
+  const [calMonth, setCalMonth] = useState(() => { const d = new Date(); d.setDate(1); return d; });
+  const [calSelectedDate, setCalSelectedDate] = useState(null);
   const [selected,  setSelected]  = useState(null);
   const timerRef = useRef(null);
 
@@ -348,6 +368,30 @@ export default function App() {
     return r.deviceId && deviceCounts[r.deviceId] >= 5;
   }
 
+  // Calendar — build day grid for the visible month with report counts
+  function dayKey(ts) {
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  }
+  const reportsByDay = {};
+  reports.forEach(r => {
+    const k = dayKey(r.timestamp);
+    if (!reportsByDay[k]) reportsByDay[k] = [];
+    reportsByDay[k].push(r);
+  });
+  const calYear  = calMonth.getFullYear();
+  const calMon   = calMonth.getMonth();
+  const firstDow = new Date(calYear, calMon, 1).getDay();
+  const daysInMon = new Date(calYear, calMon + 1, 0).getDate();
+  const todayKey = dayKey(Date.now());
+  const calCells = [];
+  for (let i = 0; i < firstDow; i++) calCells.push(null);
+  for (let d = 1; d <= daysInMon; d++) calCells.push(d);
+  const calMaxCount = Math.max(1, ...Object.values(reportsByDay).map(arr => arr.length));
+  const selectedDayReports = calSelectedDate
+    ? (reportsByDay[`${calYear}-${calMon}-${calSelectedDate}`] || [])
+    : [];
+
   const filtered = reports.filter(r => {
     const sOk = filter==="all"||r.status===filter;
     const bOk = bFilter==="all"||r.roomId.startsWith(bFilter);
@@ -384,6 +428,7 @@ export default function App() {
           {[
             {id:"overview",  label:"Overview",  icon:"📊"},
             {id:"reports",   label:"Reports",   icon:"📋", badge:pending},
+            {id:"calendar",  label:"Calendar",  icon:"📅"},
             {id:"buildings", label:"Buildings", icon:"🏢"},
             {id:"analytics", label:"Analytics", icon:"📈"},
           ].map(t => (
@@ -518,6 +563,72 @@ export default function App() {
                 );
               })}
               {filtered.length===0 && <div className="empty">No reports found.</div>}
+            </>
+          )}
+
+          {tab==="calendar" && (
+            <>
+              <div className="card">
+                <div className="cal-header">
+                  <button className="cal-nav-btn" onClick={()=>{setCalMonth(new Date(calYear, calMon-1, 1)); setCalSelectedDate(null);}}>‹</button>
+                  <div className="cal-month-label">{calMonth.toLocaleDateString("en-US",{month:"long",year:"numeric"})}</div>
+                  <button className="cal-nav-btn" onClick={()=>{setCalMonth(new Date(calYear, calMon+1, 1)); setCalSelectedDate(null);}}>›</button>
+                </div>
+                <div className="cal-grid">
+                  {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => <div className="cal-dow" key={d}>{d}</div>)}
+                  {calCells.map((d, i) => {
+                    if (d === null) return <div className="cal-cell empty-cell" key={"e"+i}/>;
+                    const key = `${calYear}-${calMon}-${d}`;
+                    const dayReports = reportsByDay[key] || [];
+                    const count = dayReports.length;
+                    const isToday = key === todayKey;
+                    const isSelected = calSelectedDate === d;
+                    const pendingCount = dayReports.filter(r=>r.status==="pending").length;
+                    let dotColor = null;
+                    if (count > 0) dotColor = pendingCount > 0 ? "var(--red)" : "var(--green)";
+                    return (
+                      <div key={d}
+                        className={`cal-cell ${isToday?"today":""} ${isSelected?"selected":""}`}
+                        onClick={()=>setCalSelectedDate(isSelected?null:d)}>
+                        <div className="cal-day-num">{d}</div>
+                        {dotColor && <div className="cal-dot" style={{background:dotColor}}/>}
+                        {count > 0 && <div className="cal-count" style={isSelected?{color:"rgba(255,255,255,0.8)"}:{}}>{count}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="cal-legend">
+                  <span className="cal-legend-dot"><span className="cal-legend-swatch" style={{background:"var(--red)"}}/>Has pending</span>
+                  <span className="cal-legend-dot"><span className="cal-legend-swatch" style={{background:"var(--green)"}}/>All resolved</span>
+                  <span className="cal-legend-dot"><span className="cal-legend-swatch" style={{background:"var(--accent)"}}/>Selected day</span>
+                </div>
+              </div>
+
+              {calSelectedDate && (
+                <div className="card">
+                  <div className="card-title">
+                    {new Date(calYear, calMon, calSelectedDate).toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}
+                    {" · "}{selectedDayReports.length} report{selectedDayReports.length!==1?"s":""}
+                  </div>
+                  {selectedDayReports.length === 0 && <div className="empty">No reports on this day.</div>}
+                  {selectedDayReports
+                    .sort((a,b)=>b.timestamp-a.timestamp)
+                    .map(r => {
+                      const iss = ISSUE_TYPES.find(i=>i.id===r.issueId);
+                      const st  = STATUS[r.status];
+                      return (
+                        <div key={r.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:"1px solid var(--border)",cursor:"pointer"}} onClick={()=>setSelected(r)}>
+                          <div style={{fontSize:18,flexShrink:0}}>{iss?.icon}</div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.roomId}</div>
+                            <div style={{fontSize:11,color:"var(--text3)",marginTop:2}}>{iss?.label} · {new Date(r.timestamp).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",hour12:true})}</div>
+                          </div>
+                          <span className="status-pill" style={{background:st.bg,color:st.color,flexShrink:0}}>{st.label}</span>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
             </>
           )}
 
